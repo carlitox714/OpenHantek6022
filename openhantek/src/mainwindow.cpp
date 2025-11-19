@@ -33,6 +33,11 @@
 #include <QPrinter>
 #include <QTimer>
 #include <QValidator>
+// --- ADDED FOR AUTO-CSV ---
+#include <QTextStream> 
+#include <QDateTime>
+#include <QStandardPaths>
+// --------------------------
 
 #include "OH_VERSION.h"
 
@@ -425,7 +430,10 @@ MainWindow::MainWindow( HantekDsoControl *dsoControl, DsoSettings *settings, Exp
     connect( ui->actionSave, &QAction::triggered, this, [ this ]() {
         dsoSettings->mainWindowGeometry = saveGeometry();
         dsoSettings->mainWindowState = saveState();
-        dsoSettings->save();
+        // Assuming ExporterCSV::save() exists and is desired here
+        // If ExporterCSV is not fully implemented, you may need to comment this out
+        // ExporterCSV::save(); 
+        dsoSettings->save();        
     } );
 
     connect( ui->actionSave_as, &QAction::triggered, this, [ this ]() {
@@ -552,12 +560,76 @@ MainWindow::~MainWindow() {
 }
 
 
-void MainWindow::showNewData( std::shared_ptr< PPresult > newData ) {
+void MainWindow::showNewData( std::shared_ptr< PPresult > newData ) {    
     if ( dsoSettings->scope.verboseLevel > 5 )
         qDebug() << "     MainWindow::showNewData()" << newData->tag;
+
+    // --- CUSTOM AUTO-EXPORT LOGIC START ---
+    // This block writes a CSV file every time new data is received (triggered)
+    // It saves to C:/OpenHantek_AutoSave (or ~/OpenHantek_AutoSave on Linux/Mac)
+    static bool isSaving = false;
+    
+    if ( newData && !isSaving ) {
+        isSaving = true; // Lock to prevent overlap if disk is slow
+
+        // Define save folder
+        #ifdef Q_OS_WIN
+            QString path = "C:/OpenHantek_AutoSave";
+        #else
+            QString path = QDir::homePath() + "/OpenHantek_AutoSave";
+        #endif
+
+        QDir dir(path);
+        if (!dir.exists()) {
+            dir.mkpath(".");
+        }
+
+        // Generate filename with ms precision
+        QString filename = path + "/capture_" + QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss_zzz") + ".csv";
+        
+        QFile file(filename);
+        if ( file.open(QIODevice::WriteOnly | QIODevice::Text) ) {
+            QTextStream out(&file);
+            
+            // Write Header
+            out << "Sample,CH1(V),CH2(V)\n";
+
+            // CORRECTED: Accessing the nested 'samples' vector inside the 'voltage' member of DataChannel.
+            const DataChannel* ch1Data = newData->data(0);
+            const DataChannel* ch2Data = newData->data(1);
+            
+            size_t count = 0;
+            // Get the maximum size of the voltage samples vectors for the loop count
+            if (ch1Data) count = ch1Data->voltage.samples.size();
+            else if (ch2Data) count = ch2Data->voltage.samples.size();
+
+
+            for (size_t i = 0; i < count; ++i) {
+                out << i << ",";
+                
+                // Write CH1 data
+                // Check if pointer is valid and index is within bounds
+                if (ch1Data && i < ch1Data->voltage.samples.size()) out << ch1Data->voltage.samples[i];
+                else out << "0";
+                
+                out << ",";
+
+                // Write CH2 data
+                if (ch2Data && i < ch2Data->voltage.samples.size()) out << ch2Data->voltage.samples[i];
+                else out << "0";
+                
+                out << "\n";
+            }
+            file.close();
+            if ( dsoSettings->scope.verboseLevel > 0 )
+                 qDebug() << "AutoSaved: " << filename;
+        }
+        isSaving = false; // Unlock
+    }
+    // --- CUSTOM AUTO-EXPORT LOGIC END ---
+
     dsoWidget->showNew( newData );
 }
-
 
 void MainWindow::exporterStatusChanged( const QString &exporterName, const QString &status ) {
     if ( dsoSettings->scope.verboseLevel > 3 )
@@ -716,3 +788,5 @@ void MainWindow::closeEvent( QCloseEvent *event ) {
     }
     QMainWindow::closeEvent( event );
 }
+
+ 
