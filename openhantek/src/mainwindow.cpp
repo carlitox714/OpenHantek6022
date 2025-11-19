@@ -134,7 +134,23 @@ MainWindow::MainWindow( HantekDsoControl *dsoControl, DsoSettings *settings, Exp
     ui->actionAbout->setToolTip( tr( "Show info about the scope's HW and SW" ) );
     ui->actionAboutQt->setIcon( QIcon( iconPath + "qt.svg" ) );
     ui->actionAboutQt->setToolTip( tr( "Show info about Qt" ) );
+    // --- NEW: Add Auto Export CSV Checkbox to Menu ---
+    QAction *actionAutoExportCsv = new QAction( QIcon( iconPath + "save_as.svg" ), tr( "&Auto Export CSV (On Trigger)" ), this );
+    actionAutoExportCsv->setToolTip( tr( "Automatically save data to CSV on the first successful trigger of a new capture." ) );
+    actionAutoExportCsv->setCheckable( true );
+    actionAutoExportCsv->setChecked( dsoSettings->scope.autoExportEnabled ); // Set initial state
+    
+    // Connect the action to update the setting
+    connect( actionAutoExportCsv, &QAction::toggled, this, [ this ]( bool checked ) {
+        // Update the setting when the checkbox is toggled
+        dsoSettings->scope.autoExportEnabled = checked;
+        // Optionally update the status bar
+        statusBar()->showMessage( checked ? tr("Single-Shot Auto Export Enabled") : tr("Single-Shot Auto Export Disabled"), 3000 );
+    } );
+    ui->menuExport->addAction( actionAutoExportCsv );
+    // -------------------------------------------------
 
+    ui->menuExport->addSeparator(); // Use existing separator
     // Window title
     setWindowIcon( QIcon( ":/images/OpenHantek.svg" ) );
     setWindowTitle( dsoControl->getDevice()->isRealHW()
@@ -565,11 +581,20 @@ void MainWindow::showNewData( std::shared_ptr< PPresult > newData ) {
         qDebug() << "     MainWindow::showNewData()" << newData->tag;
 
     // --- CUSTOM AUTO-EXPORT LOGIC START ---
-    // This block writes a CSV file every time new data is received (triggered)
-    // It saves to C:/OpenHantek_AutoSave (or ~/OpenHantek_AutoSave on Linux/Mac)
     static bool isSaving = false;
+    // Track the unique ID of the last saved data block
+    static unsigned int lastSavedTag = 0; 
     
-    if ( newData && !isSaving ) {
+    // Check 1: Feature is enabled.
+    // Check 2: New data is available and we are not currently saving.
+    // Check 3: A software trigger occurred (indicates a full capture).
+    // Check 4: The data block tag is different from the last one we saved (ensures single-shot).
+    if ( dsoSettings->scope.autoExportEnabled && 
+         newData && 
+         !isSaving &&
+         newData->softwareTriggerTriggered && 
+         newData->tag != lastSavedTag ) 
+    {
         isSaving = true; // Lock to prevent overlap if disk is slow
 
         // Define save folder
@@ -594,12 +619,11 @@ void MainWindow::showNewData( std::shared_ptr< PPresult > newData ) {
             // Write Header
             out << "Sample,CH1(V),CH2(V)\n";
 
-            // CORRECTED: Accessing the nested 'samples' vector inside the 'voltage' member of DataChannel.
+            // Access data using the structure definitions you provided
             const DataChannel* ch1Data = newData->data(0);
             const DataChannel* ch2Data = newData->data(1);
             
             size_t count = 0;
-            // Get the maximum size of the voltage samples vectors for the loop count
             if (ch1Data) count = ch1Data->voltage.samples.size();
             else if (ch2Data) count = ch2Data->voltage.samples.size();
 
@@ -608,7 +632,6 @@ void MainWindow::showNewData( std::shared_ptr< PPresult > newData ) {
                 out << i << ",";
                 
                 // Write CH1 data
-                // Check if pointer is valid and index is within bounds
                 if (ch1Data && i < ch1Data->voltage.samples.size()) out << ch1Data->voltage.samples[i];
                 else out << "0";
                 
@@ -623,6 +646,9 @@ void MainWindow::showNewData( std::shared_ptr< PPresult > newData ) {
             file.close();
             if ( dsoSettings->scope.verboseLevel > 0 )
                  qDebug() << "AutoSaved: " << filename;
+            
+            // CRITICAL STEP: Update the tag so this block is not saved again
+            lastSavedTag = newData->tag;
         }
         isSaving = false; // Unlock
     }
