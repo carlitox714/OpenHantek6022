@@ -2,12 +2,11 @@ cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 project(OpenHantek)
 
 find_package(Git)
-
-if (GIT_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
-    # show modified files
-    execute_process(
+if(GIT_EXECUTABLE AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+# show modified file
+execute_process(
         COMMAND ${GIT_EXECUTABLE} status --short
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     )
     # get the git version
     execute_process(
