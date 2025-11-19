@@ -107,7 +107,7 @@ struct DsoSettingsScope {
     DsoSettingsScopeHorizontal horizontal;            ///< Settings for the horizontal axis
     DsoSettingsScopeTrigger trigger;                  ///< Settings for the trigger
     DsoSettingsScopeAnalysis analysis;                ///< Settings for the analysis
-
+    bool autoExportEnabled = false;
     int verboseLevel = 0;
     int toolTipVisible = 1; // show hints for beginners, can be disabled in settings dialog
     bool doNotTranslate = false;
