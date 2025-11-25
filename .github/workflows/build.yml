@@ -394,6 +394,58 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
+  windows-mingw_w64:
+      runs-on: windows-2022
+      defaults:
+        run:
+          shell: msys2 {0}
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
+            submodules: recursive
+  
+        - name: Install MSYS2 + Packages
+          uses: msys2/setup-msys2@v2
+          with:
+            update: true
+            install: >-
+              base-devel
+              git
+              mingw-w64-x86_64-cmake
+              mingw-w64-x86_64-gcc
+              mingw-w64-x86_64-qt6
+              mingw-w64-x86_64-fftw
+              mingw-w64-x86_64-libusb
+  
+        - name: Configure CMake
+          run: |
+            cmake -G "MinGW Makefiles" \
+              -D CMAKE_PREFIX_PATH=/mingw64 \
+              -D CMAKE_BUILD_TYPE=Release \
+              -B build
+  
+        - name: Build
+          run: |
+            cmake --build build --parallel 4
+  
+        - name: Collect Qt DLLs
+          run: |
+            mkdir -p build/package
+            cp build/src/openhantek.exe build/package/
+            /mingw64/bin/windeployqt6.exe --no-angle build/package/openhantek.exe
+  
+        - name: Zip Release
+          run: |
+            cd build
+            zip -r openhantek_mingw64.zip package
+            ls -l
+  
+        - name: Upload Artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: openhantek_mingw64
+            path: build/openhantek_mingw64.zip
 ############################################
 # The MINGW build is currently not working #
 ############################################
