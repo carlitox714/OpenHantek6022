@@ -83,10 +83,6 @@ int main( int argc, char *argv[] ) {
     QCoreApplication::setOrganizationDomain( "openhantek.org" );
     QCoreApplication::setApplicationName( "OpenHantek6022" );
     QCoreApplication::setApplicationVersion( VERSION );
-    QCoreApplication::setAttribute( Qt::AA_UseHighDpiPixmaps, true );
-#if ( QT_VERSION >= QT_VERSION_CHECK( 5, 6, 0 ) )
-    QCoreApplication::setAttribute( Qt::AA_EnableHighDpiScaling, true );
-#endif    
 
     bool demoMode = false;
     bool autoConnect = true;
@@ -121,6 +117,7 @@ int main( int argc, char *argv[] ) {
         storeSettings.endGroup();
 
         // Pre-parse international flag so it can affect the command line help texts
+        QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
         QCoreApplication translationApp( argc, argv );
         QCommandLineParser tp;
         QCommandLineOption tintOption(
